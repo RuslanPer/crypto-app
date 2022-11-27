@@ -214,4 +214,4 @@ export default {
   </div>
 </template>
 
-<style scoped src="./app.css"></style>
+<style scoped></style>
