@@ -7,33 +7,44 @@ export default {
       tickers: [],
       sell: null,
       graph: [],
-      coinlist: {},
-      promts: [],
-      error: false,
     }
   },
+
+  created() {
+    const tickersData = localStorage.getItem('crypto-list')
+
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData)
+      this.tickers.forEach(ticker => {
+        this.subscribeToUpdates(ticker.name)
+      })
+    }
+  },
+
   methods: {
-    add(ticker) {
-      if (this.tickers.some(el => el.name === ticker.toUpperCase())) {
-        this.error = true
-      } else {
-        const currentTicker = { name: ticker, price: '-' }
+    subscribeToUpdates(tickerName) {
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=8ac1a9b152921f57064b0b7971bde839094191260cf725ab24e26d3fc052aef3`
+        )
+        const data = await f.json()
+        this.tickers.find(t => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
 
-        this.tickers.push(currentTicker)
-        setInterval(async () => {
-          const f = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=8ac1a9b152921f57064b0b7971bde839094191260cf725ab24e26d3fc052aef3`
-          )
-          const data = await f.json()
-          this.tickers.find(t => t.name === currentTicker.name).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
+        if (this.sell?.name === tickerName) {
+          this.graph.push(data.USD)
+        }
+      }, 3000)
+      this.ticker = ''
+    },
 
-          if (this.sell?.name === currentTicker.name) {
-            this.graph.push(data.USD)
-          }
-        }, 3000)
-        this.ticker = ''
-      }
+    add() {
+      const currentTicker = { name: this.ticker, price: '-' }
+
+      this.tickers.push(currentTicker)
+
+      localStorage.setItem('crypto-list', JSON.stringify(this.tickers))
+      this.subscribeToUpdates(currentTicker.name)
     },
 
     select(ticker) {
@@ -51,21 +62,6 @@ export default {
 
       return this.graph.map(price => 5 + ((price - minValue) * 95) / (maxValue - minValue))
     },
-
-    async fetchCoinlist() {
-      const response = await fetch(
-        'https://min-api.cryptocompare.com/data/all/coinlist?summary=true'
-      )
-      const data = await response.json()
-      this.coinlist = data.Data
-    },
-
-    signalChange() {
-      this.error = false
-    },
-  },
-  mounted() {
-    this.fetchCoinlist()
   },
 }
 </script>
@@ -105,7 +101,6 @@ export default {
               <input
                 v-model="ticker"
                 @keydown.enter="add"
-                v-on:input="signalChange()"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -113,24 +108,33 @@ export default {
                 placeholder="Например DOGE"
               />
             </div>
-            <div
-              v-if="promts.length"
-              class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
-            >
+            <div class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap">
               <span
-                v-for="(promt, index) in promts"
-                :key="index"
-                @click="add(promt)"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
               >
-                {{ promt }}
+                BTC
+              </span>
+              <span
+                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+              >
+                DOGE
+              </span>
+              <span
+                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+              >
+                BCH
+              </span>
+              <span
+                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+              >
+                CHD
               </span>
             </div>
-            <div v-if="error" class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
           </div>
         </div>
         <button
-          @click="add(ticker)"
+          @click="add"
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
