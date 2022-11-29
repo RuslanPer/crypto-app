@@ -1,114 +1,3 @@
-<script>
-export default {
-  name: 'App',
-  data() {
-    return {
-      ticker: '',
-      tickers: [],
-      sell: null,
-      graph: [],
-      page: 1,
-      filter: '',
-      hasNextPage: true,
-    }
-  },
-
-  created() {
-    const windowData = Object.fromEntries(new URL(window.location).searchParams.entries())
-
-    if (windowData.filter) {
-      this.filter = windowData.filter
-    }
-
-    if (windowData.page) {
-      this.page = windowData.page
-    }
-
-    const tickersData = localStorage.getItem('crypto-list')
-
-    if (tickersData) {
-      this.tickers = JSON.parse(tickersData)
-      this.tickers.forEach(ticker => {
-        this.subscribeToUpdates(ticker.name)
-      })
-    }
-  },
-
-  methods: {
-    filteredTickers() {
-      const start = (this.page - 1) * 6
-      const end = this.page * 6
-      const filteredTickers = this.tickers.filter(ticker => ticker.name.includes(this.filter))
-
-      this.hasNextPage = filteredTickers.length > end
-
-      return filteredTickers.slice(start, end)
-    },
-
-    subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=8ac1a9b152921f57064b0b7971bde839094191260cf725ab24e26d3fc052aef3`
-        )
-        const data = await f.json()
-        this.tickers.find(t => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
-
-        if (this.sell?.name === tickerName) {
-          this.graph.push(data.USD)
-        }
-      }, 3000)
-      this.ticker = ''
-    },
-
-    add() {
-      const currentTicker = { name: this.ticker, price: '-' }
-
-      this.tickers.push(currentTicker)
-      this.filter = ''
-
-      localStorage.setItem('crypto-list', JSON.stringify(this.tickers))
-      this.subscribeToUpdates(currentTicker.name)
-    },
-
-    select(ticker) {
-      this.sell = ticker
-      this.graph = []
-    },
-
-    handleDelete(tickerToRemove) {
-      this.tickers = this.tickers.filter(t => t !== tickerToRemove)
-    },
-
-    normalizeGraph() {
-      const maxValue = Math.max(...this.graph)
-      const minValue = Math.min(...this.graph)
-
-      return this.graph.map(price => 5 + ((price - minValue) * 95) / (maxValue - minValue))
-    },
-  },
-
-  watch: {
-    filter() {
-      this.page = 1
-
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-      )
-    },
-    page() {
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-      )
-    },
-  },
-}
-</script>
-
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <!-- <div
@@ -223,11 +112,11 @@ export default {
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t of filteredTickers()"
+            v-for="t of paginatedTickers"
             :key="t.name"
             @click="select(t)"
             :class="{
-              'border-4': sell === t,
+              'border-4': selectedTicker === t,
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -258,17 +147,19 @@ export default {
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section v-if="sell" class="relative">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">{{ sell.name }} - USD</h3>
+      <section v-if="selectedTicker" class="relative">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
+          {{ selectedTicker.name }} - USD
+        </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, index) in normalizeGraph()"
+            v-for="(bar, index) in normalizedGraph"
             :key="index"
             :style="{ height: `${bar}%` }"
             class="bg-purple-800 border w-10"
           ></div>
         </div>
-        <button @click="sell = null" type="button" class="absolute top-0 right-0">
+        <button @click="selectedTicker = null" type="button" class="absolute top-0 right-0">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -295,5 +186,152 @@ export default {
     </div>
   </div>
 </template>
+
+<script>
+export default {
+  name: 'App',
+  data() {
+    return {
+      ticker: '',
+      filter: '',
+
+      tickers: [],
+      selectedTicker: null,
+
+      graph: [],
+
+      page: 1,
+    }
+  },
+
+  created() {
+    const windowData = Object.fromEntries(new URL(window.location).searchParams.entries())
+
+    if (windowData.filter) {
+      this.filter = windowData.filter
+    }
+
+    if (windowData.page) {
+      this.page = windowData.page
+    }
+
+    const tickersData = localStorage.getItem('crypto-list')
+
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData)
+      this.tickers.forEach(ticker => {
+        this.subscribeToUpdates(ticker.name)
+      })
+    }
+  },
+
+  computed: {
+    startIndex() {
+      return (this.page - 1) * 6
+    },
+
+    endIndex() {
+      return this.page * 6
+    },
+
+    filteredTickers() {
+      return this.tickers.filter(ticker => ticker.name.includes(this.filter))
+    },
+
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex)
+    },
+
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex
+    },
+
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph)
+      const minValue = Math.min(...this.graph)
+
+      if (maxValue === minValue) {
+        return this.graph.map(() => 50)
+      }
+
+      return this.graph.map(price => 5 + ((price - minValue) * 95) / (maxValue - minValue))
+    },
+
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page,
+      }
+    },
+  },
+
+  methods: {
+    subscribeToUpdates(tickerName) {
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=8ac1a9b152921f57064b0b7971bde839094191260cf725ab24e26d3fc052aef3`
+        )
+        const data = await f.json()
+        this.tickers.find(t => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
+
+        if (this.selectedTicker?.name === tickerName) {
+          this.graph.push(data.USD)
+        }
+      }, 3000)
+      this.ticker = ''
+    },
+
+    add() {
+      const currentTicker = { name: this.ticker, price: '-' }
+
+      this.tickers = [...this.tickers, currentTicker]
+      this.filter = ''
+
+      this.subscribeToUpdates(currentTicker.name)
+    },
+
+    select(ticker) {
+      this.selectedTicker = ticker
+    },
+
+    handleDelete(tickerToRemove) {
+      this.tickers = this.tickers.filter(t => t !== tickerToRemove)
+
+      if (this.selectedTicker === tickerToRemove) {
+        this.selectedTicker = null
+      }
+    },
+  },
+
+  watch: {
+    tickers() {
+      localStorage.setItem('crypto-list', JSON.stringify(this.tickers))
+    },
+
+    selectedTicker() {
+      this.graph = []
+    },
+
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        this.page -= 1
+      }
+    },
+
+    filter() {
+      this.page = 1
+    },
+
+    pageStateOptions(value) {
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
+      )
+    },
+  },
+}
+</script>
 
 <style scoped></style>
