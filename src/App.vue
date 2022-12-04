@@ -140,8 +140,9 @@
                   fill-rule="evenodd"
                   d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
                   clip-rule="evenodd"
-                ></path></svg
-              >Удалить
+                ></path>
+              </svg>
+              Удалить
             </button>
           </div>
         </dl>
@@ -151,7 +152,7 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div class="flex items-end border-gray-600 border-b border-l h-64" ref="graph">
           <div
             v-for="(bar, index) in normalizedGraph"
             :key="index"
@@ -201,6 +202,7 @@ export default {
       selectedTicker: null,
 
       graph: [],
+      maxGraphElements: 1,
 
       page: 1,
     }
@@ -227,6 +229,14 @@ export default {
     }
 
     setInterval(this.updateTickers, 5000)
+  },
+
+  mounted() {
+    window.addEventListener('resize', this.calculateMaxGraphElements)
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('resize', this.calculateMaxGraphElements)
   },
 
   computed: {
@@ -270,12 +280,22 @@ export default {
   },
 
   methods: {
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return
+      }
+      this.maxGraphElements = this.$refs.graph.clientWidth / 38
+    },
+
     updateTicker(tickerName, price) {
       this.tickers
         .filter(t => t.name === tickerName)
         .forEach(t => {
           if (t === this.selectedTicker) {
             this.graph.push(price)
+            while (this.graph.length > this.maxGraphElements) {
+              this.graph.shift()
+            }
           }
           t.price = price
         })
@@ -320,6 +340,8 @@ export default {
 
     selectedTicker() {
       this.graph = []
+
+      this.$nextTick().then(this.calculateMaxGraphElements)
     },
 
     paginatedTickers() {
